@@ -1,0 +1,13 @@
+requests
+beautifulsoup4
+pandas
+numpy
+tqdm
+spacy
+geopy
+streamlit
+folium
+streamlit-folium
+plotly
+lxml
+html5lib
