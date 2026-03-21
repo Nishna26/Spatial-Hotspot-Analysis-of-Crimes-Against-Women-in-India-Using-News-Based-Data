@@ -11,3 +11,5 @@ streamlit-folium
 plotly
 lxml
 html5lib
+imghdr
+altair==4.2.2
