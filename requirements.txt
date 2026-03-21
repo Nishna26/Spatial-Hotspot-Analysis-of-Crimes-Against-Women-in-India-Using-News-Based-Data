@@ -11,3 +11,4 @@ streamlit-folium
 plotly
 lxml
 html5lib
+altair==4.2.2
