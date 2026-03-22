@@ -14,6 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
+
 # =====================================
 # CUSTOM CSS
 # =====================================
@@ -65,8 +66,8 @@ st.markdown("""
 # =====================================
 
 st.markdown(
-'<div class="main-header">Women Crime Risk Dashboard</div>',
-unsafe_allow_html=True
+    '<div class="main-header">Women Crime Risk Dashboard</div>',
+    unsafe_allow_html=True
 )
 
 
@@ -74,8 +75,8 @@ unsafe_allow_html=True
 # LOAD DATA
 # =====================================
 
-crime_df = pd.read_csv("crime_articles_dataset.csv")
 city_df = pd.read_csv("city_risk_dataset_cleaned.csv")
+crime_df = pd.read_csv("crime_articles_dataset.csv")
 
 crime_df["publish_date"] = pd.to_datetime(
     crime_df["publish_date"],
@@ -91,7 +92,7 @@ st.sidebar.title("Filters")
 
 cities = st.sidebar.multiselect(
     "Select Cities",
-    sorted(crime_df["primary_location"].dropna().unique())
+    sorted(city_df["primary_location"].dropna().unique())
 )
 
 severity_filter = st.sidebar.slider(
@@ -101,7 +102,7 @@ severity_filter = st.sidebar.slider(
     1
 )
 
-filtered_df = crime_df.copy()
+filtered_df = city_df.copy()
 
 if cities:
     filtered_df = filtered_df[
@@ -109,7 +110,18 @@ if cities:
     ]
 
 filtered_df = filtered_df[
-    filtered_df["severity"] >= severity_filter
+    filtered_df["avg_severity"] >= severity_filter
+]
+
+filtered_crime_df = crime_df.copy()
+
+if cities:
+    filtered_crime_df = filtered_crime_df[
+        filtered_crime_df["primary_location"].isin(cities)
+    ]
+
+filtered_crime_df = filtered_crime_df[
+    filtered_crime_df["severity"] >= severity_filter
 ]
 
 
@@ -117,17 +129,17 @@ filtered_df = filtered_df[
 # METRICS
 # =====================================
 
-total_articles = len(filtered_df)
+total_cases = int(filtered_df["total_cases"].sum())
 total_cities = filtered_df["primary_location"].nunique()
-avg_severity = filtered_df["severity"].mean()
+avg_severity = filtered_df["avg_severity"].mean()
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown(f"""
     <div class="metric-card">
-        <div class="metric-label">Total Crime Articles</div>
-        <div class="metric-value">{total_articles}</div>
+        <div class="metric-label">Total Cases</div>
+        <div class="metric-value">{total_cases}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -143,7 +155,7 @@ with col3:
     st.markdown(f"""
     <div class="metric-card">
         <div class="metric-label">Average Severity</div>
-        <div class="metric-value">{round(avg_severity,2)}</div>
+        <div class="metric-value">{round(avg_severity, 2) if pd.notna(avg_severity) else 0}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -153,24 +165,23 @@ with col3:
 # =====================================
 
 st.markdown(
-'<div class="section-title">Crime Hotspot Map</div>',
-unsafe_allow_html=True
+    '<div class="section-title">Crime Hotspot Map</div>',
+    unsafe_allow_html=True
 )
 
 m = folium.Map(
-    location=[22.97,78.65],
+    location=[22.97, 78.65],
     zoom_start=5,
     tiles="CartoDB positron"
 )
 
-for _, row in city_df.iterrows():
-
-    if pd.notna(row["lat"]):
-
+for _, row in filtered_df.iterrows():
+    if pd.notna(row["lat"]) and pd.notna(row["lon"]):
         popup_html = f"""
         <b>{row['primary_location']}</b><br>
         Total Cases: {row['total_cases']}<br>
-        Risk Score: {round(row['normalized_risk'],2)}<br><br>
+        Average Severity: {round(row['avg_severity'], 2)}<br>
+        Risk Score: {round(row['normalized_risk'], 2)}<br><br>
 
         <b>Need Help?</b><br>
         <a href="https://www.google.com/search?q={row['primary_location']}+women+helpline+number"
@@ -180,15 +191,15 @@ for _, row in city_df.iterrows():
         """
 
         folium.CircleMarker(
-            location=[row["lat"],row["lon"]],
-            radius=max(5,row["normalized_risk"]*20),
-            popup=folium.Popup(popup_html,max_width=300),
+            location=[row["lat"], row["lon"]],
+            radius=max(5, row["normalized_risk"] * 20),
+            popup=folium.Popup(popup_html, max_width=300),
             color="red",
             fill=True,
             fill_opacity=0.7
         ).add_to(m)
 
-st_folium(m,width=1200,height=500)
+st_folium(m, width=1200, height=500)
 
 
 # =====================================
@@ -196,16 +207,16 @@ st_folium(m,width=1200,height=500)
 # =====================================
 
 st.markdown(
-'<div class="section-title">Top Risk Cities</div>',
-unsafe_allow_html=True
+    '<div class="section-title">Top Risk Cities</div>',
+    unsafe_allow_html=True
 )
 
-top_cities = city_df.sort_values(
+top_cities = filtered_df.sort_values(
     "normalized_risk",
     ascending=False
 ).head(10)
 
-st.dataframe(top_cities,use_container_width=True)
+st.dataframe(top_cities, use_container_width=True)
 
 
 # =====================================
@@ -213,24 +224,23 @@ st.dataframe(top_cities,use_container_width=True)
 # =====================================
 
 st.markdown(
-'<div class="section-title">Crime Severity Distribution</div>',
-unsafe_allow_html=True
+    '<div class="section-title">Severity Distribution</div>',
+    unsafe_allow_html=True
 )
 
 fig = px.histogram(
     filtered_df,
-    x="severity",
-    nbins=3,
-    color="severity",
-    color_discrete_sequence=["#ff4b4b","#ff7a18","#ffa600"]
+    x="avg_severity",
+    nbins=10,
+    color_discrete_sequence=["#ff4b4b"]
 )
 
 fig.update_layout(
-    xaxis_title="Severity Level",
-    yaxis_title="Number of Cases"
+    xaxis_title="Average Severity",
+    yaxis_title="Number of Cities"
 )
 
-st.plotly_chart(fig,use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
 
 
 # =====================================
@@ -238,20 +248,22 @@ st.plotly_chart(fig,use_container_width=True)
 # =====================================
 
 st.markdown(
-'<div class="section-title">Crime Trends Over Time</div>',
-unsafe_allow_html=True
+    '<div class="section-title">Crime Trend Over Time</div>',
+    unsafe_allow_html=True
 )
 
-trend = (
-    filtered_df
-    .groupby(filtered_df["publish_date"].dt.date)
+trend_df = (
+    filtered_crime_df
+    .dropna(subset=["publish_date"])
+    .assign(trend_date=lambda df: df["publish_date"].dt.date)
+    .groupby("trend_date")
     .size()
     .reset_index(name="cases")
 )
 
 fig = px.line(
-    trend,
-    x="publish_date",
+    trend_df,
+    x="trend_date",
     y="cases",
     markers=True,
     color_discrete_sequence=["#ff4b4b"]
@@ -262,7 +274,7 @@ fig.update_layout(
     yaxis_title="Number of Cases"
 )
 
-st.plotly_chart(fig,use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
 
 
 # =====================================
@@ -270,36 +282,35 @@ st.plotly_chart(fig,use_container_width=True)
 # =====================================
 
 st.markdown(
-'<div class="section-title">Most Affected Cities</div>',
-unsafe_allow_html=True
+    '<div class="section-title">Most Affected Cities</div>',
+    unsafe_allow_html=True
 )
 
 EXCLUDE_LOCATIONS = [
-"india",
-"uttar pradesh",
-"madhya pradesh",
-"west bengal",
-"rajasthan",
-"gujarat",
-"telangana",
-"odisha",
-"bihar",
-"haryana",
-"karnataka",
-"kerala"
+    "india",
+    "uttar pradesh",
+    "madhya pradesh",
+    "west bengal",
+    "rajasthan",
+    "gujarat",
+    "telangana",
+    "odisha",
+    "bihar",
+    "haryana",
+    "karnataka",
+    "kerala"
 ]
 
 city_counts = (
     filtered_df[
         ~filtered_df["primary_location"].str.lower().isin(EXCLUDE_LOCATIONS)
-    ]
-    ["primary_location"]
-    .value_counts()
+    ][["primary_location", "total_cases"]]
+    .sort_values("total_cases", ascending=False)
     .head(10)
-    .reset_index()
+    .reset_index(drop=True)
 )
 
-city_counts.columns = ["City","Cases"]
+city_counts.columns = ["City", "Cases"]
 
 fig = px.bar(
     city_counts,
@@ -309,6 +320,4 @@ fig = px.bar(
     color_continuous_scale="Reds"
 )
 
-st.plotly_chart(fig,use_container_width=True)
-
-
+st.plotly_chart(fig, use_container_width=True)
